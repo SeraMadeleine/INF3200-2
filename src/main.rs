@@ -11,6 +11,8 @@ use sha1::{Digest, Sha1};
 use std::env;
 use std::fmt::format;
 use std::sync::{Arc, RwLock};
+use std::thread;
+use std::time::Duration;
 
 // Declare and import the storage module
 mod storage;
@@ -23,6 +25,7 @@ use node_config::NodeConfig;
 mod http_connect;
 
 const RING_SIZE: u16 = u16::MAX; // Maximum size of the ring, and thereby maximum number of nodes supported
+
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -1145,6 +1148,14 @@ fn rocket() -> _ {
             .retrieve("key")
             .expect("No value retrieved!")
     );
+
+    let thread_node_config = node_config.clone();
+    thread::spawn(move||{
+        loop {
+            thread::sleep(Duration::from_secs(5));
+            println!("Node is connected: {}", thread_node_config.read().unwrap().connected);
+        }
+    }); 
 
     rocket::build().manage(node_config).mount(
         "/",
