@@ -1,11 +1,11 @@
-use crate::{Network, Node, Storage};  
+use crate::{Network, Node, Storage};
 
 pub struct NodeConfig {
-    pub network: Option<Network>,
-    pub connected: bool,
+    // pub network: Option<Network>,
+    // pub connected: bool,
     pub local: Node,
-    pub successor: Option<Node>,
-    pub precessor: Option<Node>,
+    pub successor: Node,
+    pub precessor: Node,
     pub finger_table: Vec<Node>,
     pub storage: Storage,
     pub crashed: bool,

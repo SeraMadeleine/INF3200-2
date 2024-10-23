@@ -53,16 +53,15 @@ struct Network {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 struct JoinNetworkInformation {
-    network: Network,
+    // network: Network,
     longest_range: LongestRangeResponse,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(crate = "rocket::serde")]
-struct SuppliedNetworkInformation {
-    network_id: String,
-}
-
+// #[derive(Serialize, Deserialize, Clone)]
+// #[serde(crate = "rocket::serde")]
+// struct SuppliedNetworkInformation {
+//     network_id: String,
+// }
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 struct SuppliedNode {
@@ -224,15 +223,9 @@ fn get_storage(
 
     let mut forward_node =
         if shortest_distance_on_circumference(config.local.position, hashed_location) < 0 {
-            config
-                .precessor
-                .as_ref()
-                .expect("Could not forward, node has no successor")
+            config.precessor.clone()
         } else {
-            config
-                .successor
-                .as_ref()
-                .expect("Could not forward, node has no successor")
+            config.successor.clone()
         };
 
     // See if the key is closer to any node in the finger table
@@ -241,7 +234,7 @@ fn get_storage(
             if shortest_distance_on_circumference(node.position, hashed_location).abs()
                 < forward_node_distance
             {
-                forward_node = node;
+                forward_node = node.clone();
                 forward_node_distance =
                     shortest_distance_on_circumference(node.position, hashed_location).abs();
             }
@@ -309,15 +302,9 @@ fn put_storage(
 
     let mut forward_node =
         if shortest_distance_on_circumference(config.local.position, hashed_location) < 0 {
-            config
-                .precessor
-                .as_ref()
-                .expect("Could not forward, node has no successor")
+            config.precessor.clone()
         } else {
-            config
-                .successor
-                .as_ref()
-                .expect("Could not forward, node has no successor")
+            config.successor.clone()
         };
 
     // See if the key is closer to any node in the finger table
@@ -326,7 +313,7 @@ fn put_storage(
             if shortest_distance_on_circumference(node.position, hashed_location).abs()
                 < forward_node_distance
             {
-                forward_node = node;
+                forward_node = node.clone();
                 forward_node_distance =
                     shortest_distance_on_circumference(node.position, hashed_location).abs();
             }
@@ -360,13 +347,14 @@ fn get_precessor(
         ));
     }
 
-    match config.precessor.clone() {
-        None => Err(status::Custom(
-            Status::NoContent,
-            String::from("No precessor"),
-        )),
-        Some(precessor) => return Ok(Json(precessor)),
-    }
+    // match config.precessor.clone() {
+    //     None => Err(status::Custom(
+    //         Status::NoContent,
+    //         String::from("No precessor"),
+    //     )),
+    //     Some(precessor) => return Ok(Json(precessor)),
+    // }
+    return Ok(Json(config.precessor.clone()));
 }
 
 #[get("/ring/successor")]
@@ -382,13 +370,14 @@ fn get_successor(
         ));
     }
 
-    match config.successor.clone() {
-        None => Err(status::Custom(
-            Status::NoContent,
-            String::from("No successor"),
-        )),
-        Some(successor) => return Ok(Json(successor)),
-    }
+    // match config.successor.clone() {
+    //     None => Err(status::Custom(
+    //         Status::NoContent,
+    //         String::from("No successor"),
+    //     )),
+    //     Some(successor) => return Ok(Json(successor)),
+    // }
+    return Ok(Json(config.successor.clone()));
 }
 
 #[get("/ring/local")]
@@ -419,7 +408,7 @@ fn put_precessor(
         ));
     }
 
-    config.precessor = Some(new_precessor.0);
+    config.precessor = new_precessor.0;
 
     Ok(())
 }
@@ -448,7 +437,7 @@ fn put_successor(
 
     println!("{:?}", new_successor);
 
-    config.successor = Some(new_successor.0.clone());
+    config.successor = new_successor.0.clone();
     if new_successor.0.position < config.local.position {
         config.local.range = (RING_SIZE - config.local.position) + new_successor.0.position;
     } else {
@@ -512,11 +501,11 @@ fn calculate_finger_table(
 
     // Add local node to finger table, and all other nodes in the network
     let mut complete_node_list = vec![config.local.clone()];
-    if !config.connected {
-        let error_message = String::from("Node is not connected to a network");
-        return Err(status::Custom(Status::FailedDependency, error_message));
-    }
-    let mut current_node = config.successor.clone().expect("No successor");
+    // if !config.connected {
+    //     let error_message = String::from("Node is not connected to a network");
+    //     return Err(status::Custom(Status::FailedDependency, error_message));
+    // }
+    let mut current_node = config.successor.clone();
 
     while current_node.hostname != config.local.hostname || current_node.port != config.local.port {
         complete_node_list.push(current_node.clone());
@@ -586,27 +575,35 @@ fn get_network(
 
     let mut known_nodes: Vec<String> = Vec::new();
 
-    match config.precessor.clone() {
-        None => {}
-        Some(node) => {
-            let mut hostname_port = String::new();
-            hostname_port.push_str(&node.hostname);
-            hostname_port.push_str(":");
-            hostname_port.push_str(&node.port.to_string());
-            known_nodes.push(hostname_port);
-        }
-    }
+    // match config.precessor.clone() {
+    //     None => {}
+    //     Some(node) => {
+    //         let mut hostname_port = String::new();
+    //         hostname_port.push_str(&node.hostname);
+    //         hostname_port.push_str(":");
+    //         hostname_port.push_str(&node.port.to_string());
+    //         known_nodes.push(hostname_port);
+    //     }
+    // }
+    known_nodes.push(format!(
+        "{}:{}",
+        config.precessor.hostname, config.precessor.port
+    ));
 
-    match config.successor.clone() {
-        None => {}
-        Some(node) => {
-            let mut hostname_port = String::new();
-            hostname_port.push_str(&node.hostname);
-            hostname_port.push_str(":");
-            hostname_port.push_str(&node.port.to_string());
-            known_nodes.push(hostname_port);
-        }
-    }
+    // match config.successor.clone() {
+    //     None => {}
+    //     Some(node) => {
+    //         let mut hostname_port = String::new();
+    //         hostname_port.push_str(&node.hostname);
+    //         hostname_port.push_str(":");
+    //         hostname_port.push_str(&node.port.to_string());
+    //         known_nodes.push(hostname_port);
+    //     }
+    // }
+    known_nodes.push(format!(
+        "{}:{}",
+        config.successor.hostname, config.successor.port
+    ));
 
     return Ok(Json(known_nodes));
 }
@@ -626,10 +623,10 @@ fn get_node_info(
 
     let mut other_nodes: Vec<String> = Vec::new();
 
-    match config.precessor.clone() {
-        Some(precessor) => other_nodes.push(format!("{}:{}", precessor.hostname, precessor.port)),
-        None => {}
-    }
+    other_nodes.push(format!(
+        "{}:{}",
+        config.precessor.hostname, config.precessor.port
+    ));
 
     for node in config.finger_table.clone() {
         other_nodes.push(format!("{}:{}", node.hostname, node.port));
@@ -637,53 +634,50 @@ fn get_node_info(
 
     return Ok(Json(NodeInfo {
         node_hash: format!("{}", config.local.position),
-        successor: match config.successor.clone() {
-            Some(successor) => format!("{}:{}", successor.hostname, successor.port),
-            None => format!("undefined"),
-        },
+        successor: format!("{}:{}", config.successor.hostname, config.successor.port),
         others: other_nodes,
     }));
 }
 
-#[put("/network/initialize", data = "<network_information>")]
-fn put_network_initialize(
-    node_config: &State<Arc<RwLock<NodeConfig>>>,
-    network_information: Json<SuppliedNetworkInformation>,
-) -> Result<String, Custom<String>> {
-    let mut config = node_config.write().expect("RWLock is poisoned");
+// #[put("/network/initialize", data = "<network_information>")]
+// fn put_network_initialize(
+//     node_config: &State<Arc<RwLock<NodeConfig>>>,
+//     network_information: Json<SuppliedNetworkInformation>,
+// ) -> Result<String, Custom<String>> {
+//     let mut config = node_config.write().expect("RWLock is poisoned");
 
-    if config.is_crashed() {
-        return Err(status::Custom(
-            Status::ServiceUnavailable,
-            String::from("Node is crashed"),
-        ));
-    }
+//     if config.is_crashed() {
+//         return Err(status::Custom(
+//             Status::ServiceUnavailable,
+//             String::from("Node is crashed"),
+//         ));
+//     }
 
-    if config.connected {
-        return Err(status::Custom(
-            Status::Conflict,
-            String::from("Node is already connected to network"),
-        ));
-    }
+//     if config.connected {
+//         return Err(status::Custom(
+//             Status::Conflict,
+//             String::from("Node is already connected to network"),
+//         ));
+//     }
 
-    config.connected = true;
-    config.network = Some(Network {
-        network_id: network_information.network_id.clone(),
-    });
+//     config.connected = true;
+//     config.network = Some(Network {
+//         network_id: network_information.network_id.clone(),
+//     });
 
-    config.local.position = 0;
-    config.local.range = RING_SIZE;
-    config.precessor = Some(config.local.clone());
-    config.successor = Some(config.local.clone());
+//     config.local.position = 0;
+//     config.local.range = RING_SIZE;
+//     config.precessor = Some(config.local.clone());
+//     config.successor = Some(config.local.clone());
 
-    return Ok(format!(
-        "Initialized network with network_id: {}",
-        config
-            .network
-            .clone()
-            .map_or(String::from("default"), |network| network.network_id)
-    ));
-}
+//     return Ok(format!(
+//         "Initialized network with network_id: {}",
+//         config
+//             .network
+//             .clone()
+//             .map_or(String::from("default"), |network| network.network_id)
+//     ));
+// }
 
 #[get("/network/longest_range")]
 fn get_network_longest_range(
@@ -702,15 +696,15 @@ fn get_network_longest_range(
         started_by: config.local.clone(),
     };
 
-    if !config.connected {
-        let error_message = String::from(
-            "Node is not in a network and therefore can't provide information on longest range.",
-        );
-        println!("{}", &error_message);
-        return Err(status::Custom(Status::FailedDependency, error_message));
-    }
+    // if !config.connected {
+    //     let error_message = String::from(
+    //         "Node is not in a network and therefore can't provide information on longest range.",
+    //     );
+    //     println!("{}", &error_message);
+    //     return Err(status::Custom(Status::FailedDependency, error_message));
+    // }
 
-    let successor = config.successor.as_ref().expect("No successor");
+    let successor = config.successor.clone();
 
     let upstream_response = match http_connect::write_json_to_node(
         http_connect::WriteOperations::Post,
@@ -755,13 +749,13 @@ fn post_network_longest_range(
         ));
     }
 
-    if !config.connected {
-        let error_message = String::from(
-            "Node is not in a network and therefore can't provide information on longest range.",
-        );
-        println!("{}", &error_message);
-        return Err(status::Custom(Status::FailedDependency, error_message));
-    }
+    // if !config.connected {
+    //     let error_message = String::from(
+    //         "Node is not in a network and therefore can't provide information on longest range.",
+    //     );
+    //     println!("{}", &error_message);
+    //     return Err(status::Custom(Status::FailedDependency, error_message));
+    // }
 
     if longest_range_request.0.started_by.hostname == config.local.hostname
         && longest_range_request.0.started_by.port == config.local.port
@@ -771,7 +765,7 @@ fn post_network_longest_range(
         };
         return Ok(Json(longest_range_response));
     } else {
-        let successor = config.successor.as_ref().expect("No successor");
+        let successor = config.successor.clone();
 
         let upstream_response = match http_connect::write_json_to_node(
             http_connect::WriteOperations::Post,
@@ -823,13 +817,13 @@ fn get_network_request_join(
         ));
     }
 
-    if !config.connected {
-        let error_message = String::from(
-            "Node is not in a network and therefore can't provide information to join.",
-        );
-        println!("{}", &error_message);
-        return Err(status::Custom(Status::FailedDependency, error_message));
-    }
+    // if !config.connected {
+    //     let error_message = String::from(
+    //         "Node is not in a network and therefore can't provide information to join.",
+    //     );
+    //     println!("{}", &error_message);
+    //     return Err(status::Custom(Status::FailedDependency, error_message));
+    // }
 
     let longest_range: LongestRangeResponse = match get_network_longest_range(node_config) {
         Ok(range) => range.0,
@@ -841,11 +835,11 @@ fn get_network_request_join(
     };
 
     let join_network_information = JoinNetworkInformation {
-        network: config
-            .network
-            .as_ref()
-            .expect("Node was connected, but had no network")
-            .clone(),
+        // network: config
+        //     .network
+        //     .as_ref()
+        //     .expect("Node was connected, but had no network")
+        //     .clone(),
         longest_range: longest_range,
     };
 
@@ -920,8 +914,8 @@ fn put_network_join(
         Ok(parsed) => parsed,
     };
 
-    config.connected = true;
-    config.network = Some(received_network_information.network.clone());
+    // config.connected = true;
+    // config.network = Some(received_network_information.network.clone());
 
     config.local.position = received_network_information.longest_range.holder.position
         + received_network_information.longest_range.holder.range / 2;
@@ -936,13 +930,10 @@ fn put_network_join(
         recieved_successor.position, config.local.position
     );
 
-    config.successor = Some(recieved_successor.clone());
-    config.precessor = Some(received_network_information.longest_range.holder.clone());
+    config.successor = recieved_successor.clone();
+    config.precessor = received_network_information.longest_range.holder.clone();
 
-    let precessor = config
-        .precessor
-        .as_ref()
-        .expect("Precessor was just set, but does not exist");
+    let precessor = config.precessor.clone();
     match http_connect::write_json_to_node(
         http_connect::WriteOperations::Put,
         &precessor.hostname,
@@ -959,10 +950,7 @@ fn put_network_join(
         }
     };
 
-    let successor = config
-        .successor
-        .as_ref()
-        .expect("Successor was just set, but does not exist");
+    let successor = config.successor.clone();
     match http_connect::write_json_to_node(
         http_connect::WriteOperations::Put,
         &successor.hostname,
@@ -980,13 +968,13 @@ fn put_network_join(
     };
 
     return Ok(format!(
-        "Joined network with ID: {}",
-        config
-            .network
-            .clone()
-            .map_or(String::from("Unknown"), |network| network
-                .network_id
-                .clone())
+        "Joined network!",
+        // config
+        //     .network
+        //     .clone()
+        //     .map_or(String::from("Unknown"), |network| network
+        //         .network_id
+        //         .clone())
     ));
 }
 
@@ -996,12 +984,12 @@ fn put_network_leave(
 ) -> Result<String, Custom<String>> {
     let mut config = node_config.write().expect("RWLock is poisoned");
 
-    if !config.connected {
-        let error_message =
-            String::from("Node is not in a network and therefore can't leave the network.");
-        println!("{}", &error_message);
-        return Err(status::Custom(Status::FailedDependency, error_message));
-    }
+    // if !config.connected {
+    //     let error_message =
+    //         String::from("Node is not in a network and therefore can't leave the network.");
+    //     println!("{}", &error_message);
+    //     return Err(status::Custom(Status::FailedDependency, error_message));
+    // }
 
     if config.is_crashed() {
         return Err(status::Custom(
@@ -1010,14 +998,8 @@ fn put_network_leave(
         ));
     }
 
-    let successor = config
-        .successor
-        .as_ref()
-        .expect("Leaving network, but had no successor!");
-    let precessor = config
-        .precessor
-        .as_ref()
-        .expect("Leaving network, but had no precessor!");
+    let successor = config.successor.clone();
+    let precessor = config.precessor.clone();
 
     // Update current state of our precessor by issuing get for its local
     let precessor: Node =
@@ -1093,42 +1075,43 @@ fn put_network_leave(
         }
     };
 
-    let network_id = config
-        .network
-        .as_ref()
-        .expect("Left network without having a network!")
-        .network_id
-        .clone();
+    // let network_id = config
+    //     .network
+    //     .as_ref()
+    //     .expect("Left network without having a network!")
+    //     .network_id
+    //     .clone();
 
-    config.connected = false;
-    config.network = None;
-    config.successor = None;
-    config.precessor = None;
+    // config.connected = false;
+    // config.network = None;
+    config.successor = config.local.clone();
+    config.precessor = config.local.clone();
     config.finger_table.clear();
     config.local.position = 0;
     config.local.position = RING_SIZE;
 
-    Ok(format!("Left network {}", network_id))
+    Ok(format!("Left network"))
 }
 
 #[launch]
 fn rocket() -> _ {
+    let local_node = Node {
+        hostname: env::var("A1_HOSTNAME").expect("Hostname not provided!"),
+        port: env::var("A1_PORT")
+            .expect("Port not provided.")
+            .parse()
+            .expect("Unable to parse port value."),
+        position: 0,
+        range: RING_SIZE,
+    };
     let node_config = Arc::new(RwLock::new(NodeConfig {
-        local: Node {
-            hostname: env::var("A1_HOSTNAME").expect("Hostname not provided!"),
-            port: env::var("A1_PORT")
-                .expect("Port not provided.")
-                .parse()
-                .expect("Unable to parse port value."),
-            position: 0,
-            range: 0,
-        },
-        successor: None,
-        precessor: None,
+        local: local_node.clone(),
+        successor: local_node.clone(),
+        precessor: local_node.clone(),
         finger_table: vec![],
         storage: Storage::new(),
-        network: None,
-        connected: false,
+        // network: None,
+        // connected: false,
         crashed: false,
     }));
 
@@ -1148,14 +1131,14 @@ fn rocket() -> _ {
             .expect("No value retrieved!")
     );
 
-    let thread_node_config = node_config.clone();
-    thread::spawn(move || loop {
-        thread::sleep(Duration::from_secs(5));
-        println!(
-            "Node is connected: {}",
-            thread_node_config.read().unwrap().connected
-        );
-    });
+    // let thread_node_config = node_config.clone();
+    // thread::spawn(move || loop {
+    //     thread::sleep(Duration::from_secs(5));
+    //     println!(
+    //         "Node is connected: {}",
+    //         thread_node_config.read().unwrap().connected
+    //     );
+    // });
 
     rocket::build().manage(node_config).mount(
         "/",
@@ -1179,7 +1162,7 @@ fn rocket() -> _ {
             get_network_request_join,
             get_network_longest_range,
             post_network_longest_range,
-            put_network_initialize,
+            // put_network_initialize,
             put_network_join,
             put_network_leave
         ],
