@@ -437,11 +437,19 @@ fn put_successor(
 
     println!("{:?}", new_successor);
 
-    config.successor = new_successor.0.clone();
-    if new_successor.0.position < config.local.position {
-        config.local.range = (RING_SIZE - config.local.position) + new_successor.0.position;
+    if new_successor.hostname == config.local.hostname && new_successor.port == config.local.port {
+        config.finger_table.clear();
+        config.local.position = 0;
+        config.local.range = RING_SIZE;
+        config.successor = config.local.clone();
+        config.precessor = config.local.clone();
     } else {
-        config.local.range = new_successor.0.position - config.local.position;
+        config.successor = new_successor.0.clone();
+        if new_successor.0.position < config.local.position {
+            config.local.range = (RING_SIZE - config.local.position) + new_successor.0.position;
+        } else {
+            config.local.range = new_successor.0.position - config.local.position;
+        }
     }
 
     Ok(())
@@ -742,6 +750,8 @@ fn post_network_longest_range(
 ) -> Result<Json<LongestRangeResponse>, Custom<String>> {
     let config = node_config.read().expect("RWLock is poisoned");
 
+    println!("Handling longest range");
+
     if config.is_crashed() {
         return Err(status::Custom(
             Status::ServiceUnavailable,
@@ -763,8 +773,10 @@ fn post_network_longest_range(
         let longest_range_response = LongestRangeResponse {
             holder: config.local.clone(),
         };
+        println!("Starting longest range return");
         return Ok(Json(longest_range_response));
     } else {
+        println!("Forwarding longest range return");
         let successor = config.successor.clone();
 
         let upstream_response = match http_connect::write_json_to_node(
@@ -809,6 +821,9 @@ fn get_network_request_join(
     node_config: &State<Arc<RwLock<NodeConfig>>>,
 ) -> Result<Json<JoinNetworkInformation>, Custom<String>> {
     let config = node_config.read().expect("RWLock is poisoned");
+    println!("Local: {:?}", config.local);
+    println!("Precessor: {:?}", config.precessor);
+    println!("Successor: {:?}", config.successor);
 
     if config.is_crashed() {
         return Err(status::Custom(
@@ -832,6 +847,13 @@ fn get_network_request_join(
             holder: config.local.clone(),
         }
     } else {
+        println!(
+            "{}:{} requesting longest range from {}:{}",
+            config.local.hostname,
+            config.local.port,
+            config.successor.hostname,
+            config.successor.port
+        );
         match get_network_longest_range(node_config) {
             Ok(range) => range.0,
             Err(err) => {
@@ -902,6 +924,7 @@ fn post_network_join(
         Ok(received_network_information) => received_network_information,
     };
 
+    println!("{:?}", received_network_information.longest_range.holder);
     if received_network_information.longest_range.holder.range < 2 {
         let error_message = String::from("Unable to join as network is already full.");
         println!("{}", &error_message);
@@ -1104,11 +1127,11 @@ fn post_network_leave(
 
     // config.connected = false;
     // config.network = None;
-    config.successor = config.local.clone();
-    config.precessor = config.local.clone();
     config.finger_table.clear();
     config.local.position = 0;
-    config.local.position = RING_SIZE;
+    config.local.range = RING_SIZE;
+    config.successor = config.local.clone();
+    config.precessor = config.local.clone();
 
     Ok(format!("Left network"))
 }
