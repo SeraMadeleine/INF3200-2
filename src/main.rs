@@ -2,7 +2,7 @@
 extern crate rocket;
 
 use minreq::Response;
-use rocket::http::Status;
+use rocket::http::{RawStr, Status};
 use rocket::response::status::{self, BadRequest, Conflict, Created, Custom, NoContent};
 use rocket::serde::Deserialize;
 use rocket::serde::{json::Json, Serialize};
@@ -825,12 +825,21 @@ fn get_network_request_join(
     //     return Err(status::Custom(Status::FailedDependency, error_message));
     // }
 
-    let longest_range: LongestRangeResponse = match get_network_longest_range(node_config) {
-        Ok(range) => range.0,
-        Err(err) => {
-            let error_message = format!("Could not get longest range in network. Error: {}", err.1);
-            println!("{}", &error_message);
-            return Err(status::Custom(Status::FailedDependency, error_message));
+    let longest_range: LongestRangeResponse = if config.local.hostname == config.successor.hostname
+        && config.local.port == config.successor.port
+    {
+        LongestRangeResponse {
+            holder: config.local.clone(),
+        }
+    } else {
+        match get_network_longest_range(node_config) {
+            Ok(range) => range.0,
+            Err(err) => {
+                let error_message =
+                    format!("Could not get longest range in network. Error: {}", err.1);
+                println!("{}", &error_message);
+                return Err(status::Custom(Status::FailedDependency, error_message));
+            }
         }
     };
 
@@ -846,11 +855,20 @@ fn get_network_request_join(
     return Ok(Json(join_network_information));
 }
 
-#[put("/network/join", data = "<existing_node>")]
-fn put_network_join(
+#[post("/join?<nprime>")]
+fn post_network_join(
     node_config: &State<Arc<RwLock<NodeConfig>>>,
-    existing_node: Json<SuppliedNode>,
+    nprime: &str,
 ) -> Result<String, Custom<String>> {
+    let mut nprime_parts = nprime.split(":");
+    let join_hostname: String = String::from(nprime_parts.next().expect("Hostname not provided!"));
+    let join_port: u16 = nprime_parts
+        .next()
+        .expect("Port not provided!")
+        .parse()
+        .expect("Port must be a number!");
+    // println!("hostname: {}, port: {}", join_hostname, join_port);
+
     let mut config = node_config.write().expect("RWLock is poisoned");
 
     if config.is_crashed() {
@@ -861,8 +879,8 @@ fn put_network_join(
     }
 
     let join_response = match http_connect::get_from_node(
-        &existing_node.0.hostname,
-        existing_node.0.port,
+        &join_hostname,
+        join_port,
         "network/request_join_network_information",
     ) {
         Ok(response) => response,
@@ -870,7 +888,7 @@ fn put_network_join(
             return Err(status::Custom(
                 Status::FailedDependency,
                 String::from("Unable to join node."),
-            ))
+            ));
         }
     };
 
@@ -900,7 +918,7 @@ fn put_network_join(
             return Err(status::Custom(
                 Status::FailedDependency,
                 String::from("Could not get successor from holder of longest range."),
-            ))
+            ));
         }
     };
 
@@ -978,8 +996,8 @@ fn put_network_join(
     ));
 }
 
-#[put("/network/leave")]
-fn put_network_leave(
+#[post("/leave")]
+fn post_network_leave(
     node_config: &State<Arc<RwLock<NodeConfig>>>,
 ) -> Result<String, Custom<String>> {
     let mut config = node_config.write().expect("RWLock is poisoned");
@@ -1001,79 +1019,81 @@ fn put_network_leave(
     let successor = config.successor.clone();
     let precessor = config.precessor.clone();
 
-    // Update current state of our precessor by issuing get for its local
-    let precessor: Node =
-        match http_connect::get_from_node(&precessor.hostname, precessor.port, "ring/local") {
-            Err(_err) => {
-                return Err(status::Custom(
-                    Status::FailedDependency,
-                    String::from("Could not get current state of precessor"),
-                ))
-            }
-            Ok(response) => match response.json::<Node>() {
+    if config.local.hostname != successor.hostname || config.local.port != successor.port {
+        // Update current state of our precessor by issuing get for its local
+        let precessor: Node =
+            match http_connect::get_from_node(&precessor.hostname, precessor.port, "ring/local") {
                 Err(_err) => {
                     return Err(status::Custom(
                         Status::FailedDependency,
-                        String::from("Could not parse JSON current state of precessor"),
+                        String::from("Could not get current state of precessor"),
                     ))
                 }
-                Ok(node) => node,
-            },
-        };
+                Ok(response) => match response.json::<Node>() {
+                    Err(_err) => {
+                        return Err(status::Custom(
+                            Status::FailedDependency,
+                            String::from("Could not parse JSON current state of precessor"),
+                        ))
+                    }
+                    Ok(node) => node,
+                },
+            };
 
-    // Update current state of our successor by issuing get for its local
-    let successor: Node =
-        match http_connect::get_from_node(&successor.hostname, successor.port, "ring/local") {
-            Err(_err) => {
-                return Err(status::Custom(
-                    Status::FailedDependency,
-                    String::from("Could not get current state of successor"),
-                ))
-            }
-            Ok(response) => match response.json::<Node>() {
+        // Update current state of our successor by issuing get for its local
+        let successor: Node =
+            match http_connect::get_from_node(&successor.hostname, successor.port, "ring/local") {
                 Err(_err) => {
                     return Err(status::Custom(
                         Status::FailedDependency,
-                        String::from("Could not parse JSON current state of successor"),
+                        String::from("Could not get current state of successor"),
                     ))
                 }
-                Ok(node) => node,
-            },
+                Ok(response) => match response.json::<Node>() {
+                    Err(_err) => {
+                        return Err(status::Custom(
+                            Status::FailedDependency,
+                            String::from("Could not parse JSON current state of successor"),
+                        ))
+                    }
+                    Ok(node) => node,
+                },
+            };
+
+        // Put our current precessor as precessor for our current successor
+        match http_connect::write_json_to_node(
+            http_connect::WriteOperations::Put,
+            &successor.hostname,
+            successor.port,
+            "ring/precessor",
+            precessor.clone(),
+        ) {
+            Ok(_s) => _s,
+            Err(_err) => {
+                return Err(status::Custom(
+                    Status::FailedDependency,
+                    String::from("Could not set precessor for successor"),
+                ))
+            }
         };
 
-    // Put our current precessor as precessor for our current successor
-    match http_connect::write_json_to_node(
-        http_connect::WriteOperations::Put,
-        &successor.hostname,
-        successor.port,
-        "ring/precessor",
-        precessor.clone(),
-    ) {
-        Ok(_s) => _s,
-        Err(_err) => {
-            return Err(status::Custom(
-                Status::FailedDependency,
-                String::from("Could not set precessor for successor"),
-            ))
-        }
-    };
-
-    // Put our current successor as successor for our current precessor
-    match http_connect::write_json_to_node(
-        http_connect::WriteOperations::Put,
-        &precessor.hostname,
-        precessor.port,
-        "ring/successor",
-        successor,
-    ) {
-        Ok(_s) => _s,
-        Err(_err) => {
-            return Err(status::Custom(
-                Status::FailedDependency,
-                String::from("Could not set successor for precessor"),
-            ))
-        }
-    };
+        // Put our current successor as successor for our current precessor
+        match http_connect::write_json_to_node(
+            http_connect::WriteOperations::Put,
+            &precessor.hostname,
+            precessor.port,
+            "ring/successor",
+            successor,
+        ) {
+            Ok(_s) => _s,
+            Err(_err) => {
+                return Err(status::Custom(
+                    Status::FailedDependency,
+                    String::from("Could not set successor for precessor"),
+                ))
+            }
+        };
+    }
 
     // let network_id = config
     //     .network
@@ -1163,8 +1183,8 @@ fn rocket() -> _ {
             get_network_longest_range,
             post_network_longest_range,
             // put_network_initialize,
-            put_network_join,
-            put_network_leave
+            post_network_join,
+            post_network_leave
         ],
     )
 }
