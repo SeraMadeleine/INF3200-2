@@ -77,7 +77,7 @@ def do_request(host_port, method, url, body=None, accept_statuses=[200]):
     try:
         conn = httplib.HTTPConnection(host_port, timeout=10)
         try:
-            conn.request(method, url, body)
+            conn.request(method, url, body, headers={"Content-Type":"text/plain"})
             r = conn.getresponse()
         except Exception as e:
             raise Exception(describe_request()
