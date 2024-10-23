@@ -889,7 +889,10 @@ fn post_network_join(
         .expect("Port not provided!")
         .parse()
         .expect("Port must be a number!");
-    // println!("hostname: {}, port: {}", join_hostname, join_port);
+    println!(
+        "Joining node with hostname: {}, port: {}",
+        join_hostname, join_port
+    );
 
     let mut config = node_config.write().expect("RWLock is poisoned");
 
@@ -1174,14 +1177,66 @@ fn rocket() -> _ {
             .expect("No value retrieved!")
     );
 
-    // let thread_node_config = node_config.clone();
-    // thread::spawn(move || loop {
-    //     thread::sleep(Duration::from_secs(5));
-    //     println!(
-    //         "Node is connected: {}",
-    //         thread_node_config.read().unwrap().connected
-    //     );
-    // });
+    let mut last_received_successor: Option<Node> = None;
+    let thread_node_config = node_config.clone();
+
+    fn replace_successor(local_node: Node, new_successor: Node) {
+        println!("Writing new successor");
+        let _ = http_connect::write_json_to_node(
+            http_connect::WriteOperations::Put,
+            &local_node.hostname,
+            local_node.port,
+            "ring/successor",
+            new_successor,
+        );
+    }
+
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(5));
+
+        let config = thread_node_config.read().unwrap();
+        let local_node = config.local.clone();
+        let successor_node = config.successor.clone();
+        drop(config);
+
+        let successor_result = http_connect::get_from_node(
+            &successor_node.hostname,
+            successor_node.port,
+            "ring/successor",
+        );
+
+        let successor_response = match successor_result {
+            Ok(response) => Some(response),
+            Err(_err) => {
+                println!("Successor is dead, replacing!");
+                match last_received_successor.clone() {
+                    Some(successor) => replace_successor(local_node, successor),
+                    None => (),
+                };
+                continue;
+            }
+        };
+
+        last_received_successor = match successor_response
+            .expect("Failed to get successor")
+            .json::<Node>()
+        {
+            Ok(successor) => Some(successor),
+            Err(_err) => None,
+        };
+
+        println!(
+            "Our successor is {}:{}, it's successor {}:{}",
+            successor_node.hostname,
+            successor_node.port,
+            last_received_successor
+                .as_ref()
+                .expect("unparseable")
+                .hostname
+                .clone(),
+            last_received_successor.clone().expect("unparseable").port
+        );
+    });
 
     rocket::build().manage(node_config).mount(
         "/",
