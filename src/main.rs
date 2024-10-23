@@ -26,7 +26,6 @@ mod http_connect;
 
 const RING_SIZE: u16 = u16::MAX; // Maximum size of the ring, and thereby maximum number of nodes supported
 
-
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 struct NodeInfo {
@@ -1150,12 +1149,13 @@ fn rocket() -> _ {
     );
 
     let thread_node_config = node_config.clone();
-    thread::spawn(move||{
-        loop {
-            thread::sleep(Duration::from_secs(5));
-            println!("Node is connected: {}", thread_node_config.read().unwrap().connected);
-        }
-    }); 
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(5));
+        println!(
+            "Node is connected: {}",
+            thread_node_config.read().unwrap().connected
+        );
+    });
 
     rocket::build().manage(node_config).mount(
         "/",
