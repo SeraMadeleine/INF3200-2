@@ -102,7 +102,7 @@ do
                 echo "Created first node."
             else
                 echo "Joining node to previous node."
-                curl -v -X "POST" "http://$node:$port/join?nprime=$previous_node"
+                curl -v -X "POST" "http://$node:$port/join?nprime=$previous_node:$previous_port"
             fi
             deployed_nodes_count=$deployed_nodes_count+1
             previous_node=$node
