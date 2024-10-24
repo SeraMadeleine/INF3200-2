@@ -4,6 +4,8 @@ import json
 import time
 import urllib.request
 import numpy as np
+import re
+
 
 def dynamic_joining_test(nodes, num_runs=3):
     join_times = []
