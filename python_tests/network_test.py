@@ -37,15 +37,19 @@ def dynamic_joining_test(nodes, timeout=5, repeats=3):
                     print(f"Node {node} joined in {join_time:.2f} seconds")
                 else:
                     print(f"Error: Node {node} failed to join. Status code: {response.status}")
-                    return False
             except urllib.error.URLError as e:
                 print(f"Error: Node {node} failed to join. Error: {e}")
-                return False
             except Exception as e:
                 print(f"Unexpected error when node {node} tried to join: {e}")
-                return False
 
-        all_join_times.append(join_times)
+        if join_times:
+            all_join_times.append(join_times)
+        else:
+            print(f"Skipping repeat {repeat + 1} due to errors.")
+
+    # If no successful joins occurred, return None
+    if not all_join_times:
+        return None
 
     # Convert to NumPy array for easier calculations
     all_join_times = np.array(all_join_times)
@@ -69,6 +73,8 @@ def shutdown_nodes(nodes):
             response.read()
         except urllib.error.URLError as e:
             print(f"Error shutting down node {node}: {e}")
+        except Exception as e:
+            print(f"Unexpected error when shutting down node {node}: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
