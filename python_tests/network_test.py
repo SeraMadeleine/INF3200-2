@@ -6,50 +6,63 @@ import re
 import urllib.request
 import numpy as np
 
-def dynamic_joining_test(nodes, timeout=5):
-    """Joins each node in the nodes list dynamically."""
-    join_times = []
+# Set to True to enable debug messages
+DEBUG = False
 
-    # The first node is the initial node that others will join through
-    single_node = nodes[0]
-    other_nodes = nodes[1:]
+def debug_print(message):
+    """Prints debug messages if DEBUG mode is enabled."""
+    if DEBUG:
+        print(f"DEBUG: {message}")
 
-    # Measure the time to join each node dynamically
-    for node in other_nodes:
-        join_start_time = time.time()
-        join_url = f"http://{node}/join?nprime={single_node}"
-        req = urllib.request.Request(url=join_url, method="POST")
-        try:
-            print(f"Attempting to join node {node} with nprime={single_node}")
-            response = urllib.request.urlopen(req, timeout=timeout)
-            if response.status == 200:
-                join_time = time.time() - join_start_time
-                join_times.append(join_time)
-                print(f"Node {node} joined in {join_time:.2f} seconds")
-            else:
-                print(f"Error: Node {node} failed to join. Status code: {response.status}")
-                return False
-        except urllib.error.URLError as e:
-            print(f"Error: Node {node} failed to join. Error: {e}")
-            return False
-        except Exception as e:
-            print(f"Unexpected error when node {node} tried to join: {e}")
-            return False
+def dynamic_joining_test(nodes, timeout=5, num_runs=3):
+    """Joins each node in the nodes list dynamically and repeats the experiment to calculate average times."""
+    all_join_times = []
 
+    for run in range(num_runs):
+        debug_print(f"Starting trial {run + 1} of {num_runs}...")
+
+        join_times = []
+        single_node = nodes[0]
+        other_nodes = nodes[1:]
+
+        # Measure the time to join each node dynamically
+        for node in other_nodes:
+            join_start_time = time.time()
+            join_url = f"http://{node}/join?nprime={single_node}"
+            req = urllib.request.Request(url=join_url, method="POST")
+            try:
+                debug_print(f"Attempting to join node {node} with nprime={single_node}")
+                response = urllib.request.urlopen(req, timeout=timeout)
+                if response.status == 200:
+                    join_time = time.time() - join_start_time
+                    join_times.append(join_time)
+                    debug_print(f"Node {node} joined in {join_time:.2f} seconds")
+                else:
+                    print(f"Node {node} failed to join. Status code: {response.status}")
+                    return None
+            except urllib.error.URLError as e:
+                print(f"Node {node} failed to join. Error: {e}")
+                return None
+            except Exception as e:
+                print(f"Unexpected error when node {node} tried to join: {e}")
+                return None
+
+        all_join_times.append(sum(join_times))
+    
     # Calculate mean and standard deviation
-    join_avg = np.mean(join_times)
-    join_std = np.std(join_times)
+    join_avg = np.mean(all_join_times)
+    join_std = np.std(all_join_times)
 
     return {
         "join_avg": join_avg,
         "join_std": join_std,
-        "total_time": sum(join_times),
-        "joins_count": len(join_times)
+        "total_time_per_run": all_join_times,
+        "num_trials": num_runs
     }
 
 def shutdown_nodes(nodes):
     for node in nodes:
-        print(f"Shutting down node: {node}")
+        debug_print(f"Shutting down node: {node}")
         try:
             response = urllib.request.urlopen(f"http://{node}/shutdown", timeout=5)
             response.read()
@@ -69,9 +82,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Start nodes using run-unjoined.sh and capture the output
-    print(f"Starting {node_count} nodes...")
+    debug_print(f"Starting {node_count} nodes...")
     run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
-    print("Deployment Output:\n", run_script_output)  # Log the output for debugging
+    debug_print("Deployment Output:\n" + run_script_output)
 
     # Extract node addresses from the output
     node_list_match = re.search(r'\[".*"\]', run_script_output)
@@ -87,13 +100,15 @@ if __name__ == "__main__":
         print(f"Warning: Requested {node_count} nodes, but only {len(nodes)} were deployed.")
         sys.exit(1)
 
-    print("Running dynamic joining test...")
+    debug_print("Running dynamic joining test...")
     test_result = dynamic_joining_test(nodes)
 
     if not test_result:
         print("Dynamic joining test encountered an issue.")
     else:
         print("Dynamic joining test completed successfully.")
+        print(f"Mean join time: {test_result['join_avg']:.2f} seconds")
+        print(f"Standard deviation: {test_result['join_std']:.2f} seconds")
 
     shutdown_nodes(nodes)
 
