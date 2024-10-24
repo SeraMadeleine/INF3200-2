@@ -5,7 +5,6 @@ import time
 import re
 import urllib.request
 import numpy as np
-import matplotlib.pyplot as plt
 
 def dynamic_joining_test(nodes, timeout=5, repeats=3):
     """
@@ -65,6 +64,10 @@ def dynamic_joining_test(nodes, timeout=5, repeats=3):
     if not all_join_times:
         return None
 
+    # Ensure all join times are of equal length for creating a consistent numpy array
+    min_length = min(len(join_times) for join_times in all_join_times)
+    all_join_times = [join_times[:min_length] for join_times in all_join_times]
+
     # Convert to NumPy array for easier calculations
     all_join_times = np.array(all_join_times)
 
@@ -91,57 +94,49 @@ def shutdown_nodes(nodes):
             print(f"Unexpected error when shutting down node {node}: {e}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f"Usage: python3 {sys.argv[0]} <node count>")
-        print(f"Example: python3 {sys.argv[0]} 32")
-        sys.exit(1)
+    node_counts = [2, 4, 8]
+    results = []
 
-    try:
-        node_count = int(sys.argv[1])
-    except ValueError:
-        print("Invalid node count provided.")
-        sys.exit(1)
+    for node_count in node_counts:
+        print(f"\nStarting test with {node_count} nodes...")
+        run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
+        print("Deployment Output:\n", run_script_output)  # Log the output for debugging
 
-    # Start nodes using run-unjoined.sh and capture the output
-    print(f"Starting {node_count} nodes...")
-    run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
-    print("Deployment Output:\n", run_script_output)  # Log the output for debugging
+        # Extract node addresses from the output
+        node_list_match = re.search(r'\[".*"\]', run_script_output)
+        if not node_list_match:
+            print(f"Failed to extract node list from run-unjoined.sh output for {node_count} nodes.")
+            continue
 
-    # Extract node addresses from the output
-    node_list_match = re.search(r'\[".*"\]', run_script_output)
-    if not node_list_match:
-        print("Failed to extract node list from run-unjoined.sh output.")
-        sys.exit(1)
+        node_list_json = node_list_match.group()
+        nodes = json.loads(node_list_json)
 
-    node_list_json = node_list_match.group()
-    nodes = json.loads(node_list_json)
+        # Check if the number of nodes matches the expected count
+        if len(nodes) < node_count:
+            print(f"Warning: Requested {node_count} nodes, but only {len(nodes)} were deployed.")
+            continue
 
-    # Check if the number of nodes matches the expected count
-    if len(nodes) < node_count:
-        print(f"Warning: Requested {node_count} nodes, but only {len(nodes)} were deployed.")
-        sys.exit(1)
+        print("Running dynamic joining test...")
+        test_result = dynamic_joining_test(nodes)
 
-    print("Running dynamic joining test...")
-    test_result = dynamic_joining_test(nodes)
+        if not test_result:
+            print("Dynamic joining test encountered an issue for {node_count} nodes.")
+        else:
+            print("Dynamic joining test completed successfully for {node_count} nodes.")
+            result_entry = {
+                "nodes": node_count,
+                "join_avg": test_result["join_avg"],
+                "join_std": test_result["join_std"],
+                "total_time": test_result["total_time"],
+                "joins_count": test_result["joins_count"]
+            }
+            results.append(result_entry)
 
-    if not test_result:
-        print("Dynamic joining test encountered an issue.")
-    else:
-        print("Dynamic joining test completed successfully.")
-        print(json.dumps(test_result, indent=2))
+        shutdown_nodes(nodes)
 
-        # Plotting the results
-        mean_values = test_result['join_avg']
-        std_values = test_result['join_std']
-        node_indices = np.arange(1, len(mean_values) + 1)
+    # Write results to res.txt file
+    with open("res.txt", "w") as f:
+        f.write("no_finger_results = ")
+        json.dump(results, f, indent=2)
 
-        plt.errorbar(node_indices, mean_values, yerr=std_values, fmt='o-', ecolor='r', capsize=5, label='Join Times')
-        plt.xlabel('Node Index')
-        plt.ylabel('Join Time (s)')
-        plt.title('Mean Join Times with Standard Deviation')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-    shutdown_nodes(nodes)
-    print("Test done!")
+    print("All tests completed! Results saved to res.txt")
