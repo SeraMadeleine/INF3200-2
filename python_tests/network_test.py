@@ -1,6 +1,4 @@
 import os
-import re
-import uuid
 import sys
 import json
 import time
@@ -68,7 +66,7 @@ if __name__ == "__main__":
 
     # Start with the initial node
     print("Starting initial node...")
-    run_script_output = os.popen(f"sh ./run-unjoined.sh 1 {8000}").read()
+    run_script_output = os.popen(f"sh ../src/run-unjoined.sh 1 {8000}").read()
 
     # Generate node addresses for the test
     nodes = [f"localhost:{8000 + i}" for i in range(1, node_count + 1)]
@@ -77,7 +75,7 @@ if __name__ == "__main__":
     print(f"Deploying {node_count - 1} additional nodes in unjoined state...")
     for i in range(2, node_count + 1):
         port = 8000 + i
-        os.popen(f"sh ./run-unjoined.sh {i} {port}")
+        os.popen(f"sh ../src/run-unjoined.sh {i} {port}")
 
     print("Running dynamic joining test...")
     test_result = dynamic_joining_test(nodes)
