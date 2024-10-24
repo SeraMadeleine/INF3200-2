@@ -1,147 +1,121 @@
 import os
-import sys
-import json
-import time
 import re
+import json
+import subprocess
+import time
+import statistics
 import urllib.request
 import numpy as np
 
-def dynamic_joining_test(nodes, timeout=5, repeats=3):
-    """
-    Joins each node in the nodes list dynamically for a given number of repeats.
-    Returns the mean and standard deviation of the measured join times.
-    """
-    all_join_times = []
+RESULTS_FILE = "res.txt"
+ITERATIONS = 3
+NODE_COUNTS = [2, 4, 8, 16, 32]
+MAX_NODES = max(NODE_COUNTS)
 
-    # Repeat the experiment for the specified number of times
-    for repeat in range(repeats):
-        join_times = []
-        print(f"\nStarting repeat {repeat + 1}...")
+# Get the absolute path of the current script directory
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-        # Start nodes again for each repeat to ensure availability
-        print(f"Starting nodes for repeat {repeat + 1}...")
-        run_script_output = os.popen(f"sh ../src/run-unjoined.sh {len(nodes)}").read()
-        print("Deployment Output:\n", run_script_output)  # Log the output for debugging
+def remove_previous_results():
+    # Remove previous results file if exists
+    if os.path.exists(RESULTS_FILE):
+        os.remove(RESULTS_FILE)
 
-        # Extract node addresses from the output
-        node_list_match = re.search(r'\[".*"\]', run_script_output)
-        if not node_list_match:
-            print(f"Failed to extract node list for repeat {repeat + 1} from run-unjoined.sh output.")
-            continue
+def start_nodes():
+    print("Starting 32 nodes...")
+    try:
+        nodesstr = os.popen(f" sh {os.path.join(SCRIPT_DIR, '../src/run-unjoined.sh')} {MAX_NODES}").read()
+    except PermissionError as e:
+        print(f'error {e}')
+    # print("nodes started")
 
-        node_list_json = node_list_match.group()
-        nodes = json.loads(node_list_json)
+    nodesmatch = re.findall("\\[.*\\]", nodesstr)
+    nodes = json.loads(nodesmatch[0])
 
-        # The first node is the initial node that others will join through
-        single_node = nodes[0]
-        other_nodes = nodes[1:]
+    return nodes
 
-        # Measure the time to join each node dynamically
-        for node in other_nodes:
-            join_start_time = time.time()
-            join_url = f"http://{node}/join?nprime={single_node}"
+def join_nodes(nodes):
+    n_prime = nodes[0]
+    node_count = 1 
+    join_times = [] 
+
+    for target_node_count in NODE_COUNTS:
+        # print(f"Target node count: {target_node_count}")
+        join_start_time = time.time()
+        while node_count < target_node_count:
+            # print(f"Joining {nodes[node_count-1]} to {n_prime}") 
+            join_url = f"http://{nodes[node_count-1]}/join?nprime={n_prime}"
             req = urllib.request.Request(url=join_url, method="POST")
-            try:
-                print(f"Attempting to join node {node} with nprime={single_node}")
-                response = urllib.request.urlopen(req, timeout=timeout)
-                if response.status == 200:
-                    join_time = time.time() - join_start_time
-                    join_times.append(join_time)
-                    print(f"Node {node} joined in {join_time:.2f} seconds")
-                else:
-                    print(f"Error: Node {node} failed to join. Status code: {response.status}")
-            except urllib.error.URLError as e:
-                print(f"Error: Node {node} failed to join. Error: {e}")
-            except Exception as e:
-                print(f"Unexpected error when node {node} tried to join: {e}")
 
-        if join_times:
-            all_join_times.append(join_times)
-        else:
-            print(f"Skipping repeat {repeat + 1} due to errors.")
+            node_count += 1
 
-    # If no successful joins occurred, return None
-    if not all_join_times:
-        return None
+        join_end_time = time.time()
+        join_times.append(join_end_time - join_start_time)
+    print(f' join times {join_times}')
 
-    # Ensure all join times are of equal length for creating a consistent numpy array
-    min_length = min(len(join_times) for join_times in all_join_times)
-    all_join_times = [join_times[:min_length] for join_times in all_join_times]
+    return join_times
+    
+def leave_nodes(nodes):
+    leave_times = [] 
+    node_count = NODE_COUNTS[-1]
 
-    # Convert to NumPy array for easier calculations
-    all_join_times = np.array(all_join_times)
+    for target_node_count in reversed(NODE_COUNTS):
+        # print(f"Target node count: {target_node_count}")
 
-    # Calculate mean and standard deviation across repeats for each node join time
-    join_avg = np.mean(all_join_times, axis=0)
-    join_std = np.std(all_join_times, axis=0)
+        leave_start_time = time.time()
+        while node_count > target_node_count: 
+            leave_url = f'https://{nodes[node_count-1]}/leave'
+            req = urllib.request.Request(url=leave_url, method="POST")
 
-    return {
-        "join_avg": join_avg.tolist(),  # Convert to list for JSON serialization
-        "join_std": join_std.tolist(),  # Convert to list for JSON serialization
-        "total_time": float(np.sum(join_avg)),  # Convert to float for JSON serialization
-        "joins_count": int(len(join_avg))
-    }
+            node_count -= 1
+        leave_end_time = time.time()
+        leave_times.append(leave_end_time - leave_start_time)
+    print(f' leave times {leave_times}')
+
+    return leave_times
 
 def shutdown_nodes(nodes):
     for node in nodes:
-        print(f"Shutting down node: {node}")
-        try:
-            response = urllib.request.urlopen(f"http://{node}/shutdown", timeout=5)
-            response.read()
-        except urllib.error.URLError as e:
-            print(f"Error shutting down node {node}: {e}")
-        except Exception as e:
-            print(f"Unexpected error when shutting down node {node}: {e}")
+        # print(f"Shutting down node: {node}")
+        response = urllib.request.urlopen(f"http://{node}/shutdown").read()
+
+def calculate_stats(times):
+    avg = sum(times) / len(times) if times else 0
+    std = statistics.stdev(times) if len(times) > 1 else 0
+    return avg, std
 
 if __name__ == "__main__":
-    node_counts = [2, 4, 8]
-    results = []
+    nodes = start_nodes()
+    # print(f'nodes: {nodes}')
+    all_join_times = {node_count: [] for node_count in NODE_COUNTS}
+    all_leave_times = {node_count: [] for node_count in NODE_COUNTS}
+    
+    for i in range(ITERATIONS): 
+        join_times = join_nodes(nodes)
+        leave_times = leave_nodes(nodes)
+        
+        for idx, node_count in enumerate(NODE_COUNTS):
+            all_join_times[node_count].append(join_times[idx])
+            all_leave_times[node_count].append(leave_times[idx])
 
-    for node_count in node_counts:
-        print(f"\nStarting test with {node_count} nodes...")
-        run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
-        print("Deployment Output:\n", run_script_output)  # Log the output for debugging
+    for node_count in NODE_COUNTS:
+        join_avg = np.mean(all_join_times[node_count])
+        join_std = np.std(all_join_times[node_count])
+        leave_avg = np.mean(all_leave_times[node_count])
+        leave_std = np.std(all_leave_times[node_count])
 
-        # Extract node addresses from the output
-        node_list_match = re.search(r'\[".*"\]', run_script_output)
-        if not node_list_match:
-            print(f"Failed to extract node list from run-unjoined.sh output for {node_count} nodes.")
-            continue
-
-        node_list_json = node_list_match.group()
-        nodes = json.loads(node_list_json)
-
-        # Check if the number of nodes matches the expected count
-        if len(nodes) < node_count:
-            print(f"Warning: Requested {node_count} nodes, but only {len(nodes)} were deployed.")
-            continue
-
-        print("Running dynamic joining test...")
-        test_result = dynamic_joining_test(nodes)
-
-        if not test_result:
-            print("Dynamic joining test encountered an issue for {node_count} nodes.")
-        else:
-            print("Dynamic joining test completed successfully for {node_count} nodes.")
-
-            # Calculate mean and standard deviation
-            join_avg = np.mean(test_result["join_avg"])
-            join_std = np.std(test_result["join_std"])
-
-            result_entry = {
-                "nodes": node_count,
-                "join_avg": join_avg,
-                "join_std": join_std,
-                "total_time": test_result["total_time"],
-                "joins_count": test_result["joins_count"]
+        result = {
+                'nodes': node_count,
+                'join_avg': join_avg,
+                'join_std': join_std,
+                'leave_avg': leave_avg,
+                'leave_std': leave_std
             }
-            results.append(result_entry)
+        print(f'{result}, ')
+        
+        # print(f'Node count: {node_count}')
+        # print(f'  Join - Avg: {join_avg:.6f}, Std: {join_std:.6f}')
+        # print(f'  Leave - Avg: {leave_avg:.6f}, Std: {leave_std:.6f}')
 
-        shutdown_nodes(nodes)
+    shutdown_nodes(nodes)
+    remove_previous_results()
 
-    # Write results to res.txt file
-    with open("res.txt", "w") as f:
-        f.write("no_finger_results = ")
-        json.dump(results, f, indent=2)
-
-    print("All tests completed! Results saved to res.txt")
