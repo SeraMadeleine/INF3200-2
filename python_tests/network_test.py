@@ -19,6 +19,20 @@ def dynamic_joining_test(nodes, timeout=5, repeats=3):
         join_times = []
         print(f"\nStarting repeat {repeat + 1}...")
 
+        # Start nodes again for each repeat to ensure availability
+        print(f"Starting nodes for repeat {repeat + 1}...")
+        run_script_output = os.popen(f"sh ../src/run-unjoined.sh {len(nodes)}").read()
+        print("Deployment Output:\n", run_script_output)  # Log the output for debugging
+
+        # Extract node addresses from the output
+        node_list_match = re.search(r'\[".*"\]', run_script_output)
+        if not node_list_match:
+            print(f"Failed to extract node list for repeat {repeat + 1} from run-unjoined.sh output.")
+            continue
+
+        node_list_json = node_list_match.group()
+        nodes = json.loads(node_list_json)
+
         # The first node is the initial node that others will join through
         single_node = nodes[0]
         other_nodes = nodes[1:]
@@ -59,10 +73,10 @@ def dynamic_joining_test(nodes, timeout=5, repeats=3):
     join_std = np.std(all_join_times, axis=0)
 
     return {
-        "join_avg": join_avg,
-        "join_std": join_std,
-        "total_time": np.sum(join_avg),
-        "joins_count": len(join_avg)
+        "join_avg": join_avg.tolist(),  # Convert to list for JSON serialization
+        "join_std": join_std.tolist(),  # Convert to list for JSON serialization
+        "total_time": float(np.sum(join_avg)),  # Convert to float for JSON serialization
+        "joins_count": int(len(join_avg))
     }
 
 def shutdown_nodes(nodes):
