@@ -6,7 +6,7 @@ import re
 import urllib.request
 import numpy as np
 
-def dynamic_joining_test(nodes, num_runs=3):
+def dynamic_joining_test(nodes, num_runs=3, timeout=5):
     join_times = []
 
     for _ in range(num_runs):
@@ -19,7 +19,8 @@ def dynamic_joining_test(nodes, num_runs=3):
             join_url = f"http://{node}/join?nprime={single_node}"
             req = urllib.request.Request(url=join_url, method="POST")
             try:
-                response = urllib.request.urlopen(req)
+                print(f"Attempting to join node {node} with nprime={single_node}")
+                response = urllib.request.urlopen(req, timeout=timeout)
                 if response.status == 200:
                     join_time = time.time() - join_start_time
                     join_times.append(join_time)
@@ -29,6 +30,9 @@ def dynamic_joining_test(nodes, num_runs=3):
                     return False
             except urllib.error.URLError as e:
                 print(f"Error: Node {node} failed to join. Error: {e}")
+                return False
+            except Exception as e:
+                print(f"Unexpected error when node {node} tried to join: {e}")
                 return False
 
     # Calculate mean and standard deviation
@@ -46,7 +50,7 @@ def shutdown_nodes(nodes):
     for node in nodes:
         print(f"Shutting down node: {node}")
         try:
-            response = urllib.request.urlopen(f"http://{node}/shutdown")
+            response = urllib.request.urlopen(f"http://{node}/shutdown", timeout=5)
             response.read()
         except urllib.error.URLError as e:
             print(f"Error shutting down node {node}: {e}")
@@ -84,6 +88,11 @@ if __name__ == "__main__":
 
     print("Running dynamic joining test...")
     test_result = dynamic_joining_test(nodes)
+
+    if not test_result:
+        print("Dynamic joining test encountered an issue.")
+    else:
+        print("Dynamic joining test completed successfully.")
 
     shutdown_nodes(nodes)
 
