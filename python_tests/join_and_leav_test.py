@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import subprocess
 import time
 import statistics
 import urllib.request
@@ -15,10 +14,7 @@ MAX_NODES = max(NODE_COUNTS)
 # Get the absolute path of the current script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def remove_previous_results():
-    # Remove previous results file if exists
-    if os.path.exists(RESULTS_FILE):
-        os.remove(RESULTS_FILE)
+
 
 def start_nodes():
     print("Starting 32 nodes...")
@@ -117,5 +113,4 @@ if __name__ == "__main__":
         # print(f'  Leave - Avg: {leave_avg:.6f}, Std: {leave_std:.6f}')
 
     shutdown_nodes(nodes)
-    remove_previous_results()
 
