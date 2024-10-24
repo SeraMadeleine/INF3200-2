@@ -2,10 +2,9 @@ import os
 import sys
 import json
 import time
+import re
 import urllib.request
 import numpy as np
-import re
-
 
 def dynamic_joining_test(nodes, num_runs=3):
     join_times = []
@@ -67,6 +66,7 @@ if __name__ == "__main__":
     # Start nodes using run-unjoined.sh and capture the output
     print(f"Starting {node_count} nodes...")
     run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
+    print("Deployment Output:\n", run_script_output)  # Log the output for debugging
 
     # Extract node addresses from the output
     node_list_match = re.search(r'\[".*"\]', run_script_output)
@@ -76,6 +76,11 @@ if __name__ == "__main__":
 
     node_list_json = node_list_match.group()
     nodes = json.loads(node_list_json)
+
+    # Check if the number of nodes matches the expected count
+    if len(nodes) < node_count:
+        print(f"Warning: Requested {node_count} nodes, but only {len(nodes)} were deployed.")
+        sys.exit(1)
 
     print("Running dynamic joining test...")
     test_result = dynamic_joining_test(nodes)
