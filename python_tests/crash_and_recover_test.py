@@ -66,7 +66,7 @@ def put_get_test(nodes):
     key_value_to_test = [(uuid.uuid4(), uuid.uuid4()) for _ in range(1000)]
 
     for key, value in key_value_to_test:
-            print(f"PUT http://{random.choice(nodes)}/storage/{key}")
+            # print(f"PUT http://{random.choice(nodes)}/storage/{key}")
             req = urllib.request.Request(
                 url=f"http://{random.choice(nodes)}/storage/{key}", 
                 data=bytes(str(value).encode("utf-8")), 
