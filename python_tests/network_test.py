@@ -6,34 +6,35 @@ import re
 import urllib.request
 import numpy as np
 
-def dynamic_joining_test(nodes, num_runs=3, timeout=5):
+def dynamic_joining_test(nodes, timeout=5):
+    """Joins each node in the nodes list dynamically."""
     join_times = []
 
-    for _ in range(num_runs):
-        single_node = nodes[0]
-        other_nodes = nodes[1:]
+    # The first node is the initial node that others will join through
+    single_node = nodes[0]
+    other_nodes = nodes[1:]
 
-        # Measure the time to join each node dynamically
-        for node in other_nodes:
-            join_start_time = time.time()
-            join_url = f"http://{node}/join?nprime={single_node}"
-            req = urllib.request.Request(url=join_url, method="POST")
-            try:
-                print(f"Attempting to join node {node} with nprime={single_node}")
-                response = urllib.request.urlopen(req, timeout=timeout)
-                if response.status == 200:
-                    join_time = time.time() - join_start_time
-                    join_times.append(join_time)
-                    print(f"Node {node} joined in {join_time:.2f} seconds")
-                else:
-                    print(f"Error: Node {node} failed to join. Status code: {response.status}")
-                    return False
-            except urllib.error.URLError as e:
-                print(f"Error: Node {node} failed to join. Error: {e}")
+    # Measure the time to join each node dynamically
+    for node in other_nodes:
+        join_start_time = time.time()
+        join_url = f"http://{node}/join?nprime={single_node}"
+        req = urllib.request.Request(url=join_url, method="POST")
+        try:
+            print(f"Attempting to join node {node} with nprime={single_node}")
+            response = urllib.request.urlopen(req, timeout=timeout)
+            if response.status == 200:
+                join_time = time.time() - join_start_time
+                join_times.append(join_time)
+                print(f"Node {node} joined in {join_time:.2f} seconds")
+            else:
+                print(f"Error: Node {node} failed to join. Status code: {response.status}")
                 return False
-            except Exception as e:
-                print(f"Unexpected error when node {node} tried to join: {e}")
-                return False
+        except urllib.error.URLError as e:
+            print(f"Error: Node {node} failed to join. Error: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error when node {node} tried to join: {e}")
+            return False
 
     # Calculate mean and standard deviation
     join_avg = np.mean(join_times)
