@@ -57,11 +57,6 @@ struct JoinNetworkInformation {
     longest_range: LongestRangeResponse,
 }
 
-// #[derive(Serialize, Deserialize, Clone)]
-// #[serde(crate = "rocket::serde")]
-// struct SuppliedNetworkInformation {
-//     network_id: String,
-// }
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 struct SuppliedNode {
@@ -164,27 +159,6 @@ fn post_sim_crash(node_config: &State<Arc<RwLock<NodeConfig>>>) -> Result<(), Cu
 fn post_sim_recover(node_config: &State<Arc<RwLock<NodeConfig>>>) -> () {
     let mut config = node_config.write().expect("RWLock is poisoned");
     config.recover();
-
-    // let join_node = None
-    // // Check is precessor is online
-    // if precessor online {
-    //     join_node = precessor
-    // }
-    // else if successor_online {
-    //     join_node = successor
-    // }
-    // else {
-    //     check finger table nodes
-    //         join_node = online node
-    // }
-
-    // If some
-    //     put_network_join(
-    //         node_config,
-    //         Json(SuppliedNode { hostname: .hostname, port: () }),
-    //     );
-    // Else
-    //     Cant join error
 }
 
 // endpoint to retrive a value for a given
@@ -347,13 +321,6 @@ fn get_precessor(
         ));
     }
 
-    // match config.precessor.clone() {
-    //     None => Err(status::Custom(
-    //         Status::NoContent,
-    //         String::from("No precessor"),
-    //     )),
-    //     Some(precessor) => return Ok(Json(precessor)),
-    // }
     return Ok(Json(config.precessor.clone()));
 }
 
@@ -370,13 +337,6 @@ fn get_successor(
         ));
     }
 
-    // match config.successor.clone() {
-    //     None => Err(status::Custom(
-    //         Status::NoContent,
-    //         String::from("No successor"),
-    //     )),
-    //     Some(successor) => return Ok(Json(successor)),
-    // }
     return Ok(Json(config.successor.clone()));
 }
 
@@ -509,10 +469,7 @@ fn calculate_finger_table(
 
     // Add local node to finger table, and all other nodes in the network
     let mut complete_node_list = vec![config.local.clone()];
-    // if !config.connected {
-    //     let error_message = String::from("Node is not connected to a network");
-    //     return Err(status::Custom(Status::FailedDependency, error_message));
-    // }
+   
     let mut current_node = config.successor.clone();
 
     while current_node.hostname != config.local.hostname || current_node.port != config.local.port {
@@ -583,31 +540,11 @@ fn get_network(
 
     let mut known_nodes: Vec<String> = Vec::new();
 
-    // match config.precessor.clone() {
-    //     None => {}
-    //     Some(node) => {
-    //         let mut hostname_port = String::new();
-    //         hostname_port.push_str(&node.hostname);
-    //         hostname_port.push_str(":");
-    //         hostname_port.push_str(&node.port.to_string());
-    //         known_nodes.push(hostname_port);
-    //     }
-    // }
+
     known_nodes.push(format!(
         "{}:{}",
         config.precessor.hostname, config.precessor.port
     ));
-
-    // match config.successor.clone() {
-    //     None => {}
-    //     Some(node) => {
-    //         let mut hostname_port = String::new();
-    //         hostname_port.push_str(&node.hostname);
-    //         hostname_port.push_str(":");
-    //         hostname_port.push_str(&node.port.to_string());
-    //         known_nodes.push(hostname_port);
-    //     }
-    // }
     known_nodes.push(format!(
         "{}:{}",
         config.successor.hostname, config.successor.port
@@ -647,45 +584,6 @@ fn get_node_info(
     }));
 }
 
-// #[put("/network/initialize", data = "<network_information>")]
-// fn put_network_initialize(
-//     node_config: &State<Arc<RwLock<NodeConfig>>>,
-//     network_information: Json<SuppliedNetworkInformation>,
-// ) -> Result<String, Custom<String>> {
-//     let mut config = node_config.write().expect("RWLock is poisoned");
-
-//     if config.is_crashed() {
-//         return Err(status::Custom(
-//             Status::ServiceUnavailable,
-//             String::from("Node is crashed"),
-//         ));
-//     }
-
-//     if config.connected {
-//         return Err(status::Custom(
-//             Status::Conflict,
-//             String::from("Node is already connected to network"),
-//         ));
-//     }
-
-//     config.connected = true;
-//     config.network = Some(Network {
-//         network_id: network_information.network_id.clone(),
-//     });
-
-//     config.local.position = 0;
-//     config.local.range = RING_SIZE;
-//     config.precessor = Some(config.local.clone());
-//     config.successor = Some(config.local.clone());
-
-//     return Ok(format!(
-//         "Initialized network with network_id: {}",
-//         config
-//             .network
-//             .clone()
-//             .map_or(String::from("default"), |network| network.network_id)
-//     ));
-// }
 
 #[get("/network/longest_range")]
 fn get_network_longest_range(
@@ -703,14 +601,6 @@ fn get_network_longest_range(
     let longest_range_request = LongestRangeRequest {
         started_by: config.local.clone(),
     };
-
-    // if !config.connected {
-    //     let error_message = String::from(
-    //         "Node is not in a network and therefore can't provide information on longest range.",
-    //     );
-    //     println!("{}", &error_message);
-    //     return Err(status::Custom(Status::FailedDependency, error_message));
-    // }
 
     let successor = config.successor.clone();
 
@@ -758,14 +648,6 @@ fn post_network_longest_range(
             String::from("Node is crashed"),
         ));
     }
-
-    // if !config.connected {
-    //     let error_message = String::from(
-    //         "Node is not in a network and therefore can't provide information on longest range.",
-    //     );
-    //     println!("{}", &error_message);
-    //     return Err(status::Custom(Status::FailedDependency, error_message));
-    // }
 
     if longest_range_request.0.started_by.hostname == config.local.hostname
         && longest_range_request.0.started_by.port == config.local.port
@@ -832,14 +714,6 @@ fn get_network_request_join(
         ));
     }
 
-    // if !config.connected {
-    //     let error_message = String::from(
-    //         "Node is not in a network and therefore can't provide information to join.",
-    //     );
-    //     println!("{}", &error_message);
-    //     return Err(status::Custom(Status::FailedDependency, error_message));
-    // }
-
     let longest_range: LongestRangeResponse = if config.local.hostname == config.successor.hostname
         && config.local.port == config.successor.port
     {
@@ -866,11 +740,6 @@ fn get_network_request_join(
     };
 
     let join_network_information = JoinNetworkInformation {
-        // network: config
-        //     .network
-        //     .as_ref()
-        //     .expect("Node was connected, but had no network")
-        //     .clone(),
         longest_range: longest_range,
     };
 
@@ -958,8 +827,6 @@ fn post_network_join(
         Ok(parsed) => parsed,
     };
 
-    // config.connected = true;
-    // config.network = Some(received_network_information.network.clone());
 
     config.local.position = received_network_information.longest_range.holder.position
         + received_network_information.longest_range.holder.range / 2;
@@ -1013,12 +880,6 @@ fn post_network_join(
 
     return Ok(format!(
         "Joined network!",
-        // config
-        //     .network
-        //     .clone()
-        //     .map_or(String::from("Unknown"), |network| network
-        //         .network_id
-        //         .clone())
     ));
 }
 
@@ -1027,13 +888,6 @@ fn post_network_leave(
     node_config: &State<Arc<RwLock<NodeConfig>>>,
 ) -> Result<String, Custom<String>> {
     let mut config = node_config.write().expect("RWLock is poisoned");
-
-    // if !config.connected {
-    //     let error_message =
-    //         String::from("Node is not in a network and therefore can't leave the network.");
-    //     println!("{}", &error_message);
-    //     return Err(status::Custom(Status::FailedDependency, error_message));
-    // }
 
     if config.is_crashed() {
         return Err(status::Custom(
@@ -1121,15 +975,6 @@ fn post_network_leave(
         };
     }
 
-    // let network_id = config
-    //     .network
-    //     .as_ref()
-    //     .expect("Left network without having a network!")
-    //     .network_id
-    //     .clone();
-
-    // config.connected = false;
-    // config.network = None;
     config.finger_table.clear();
     config.local.position = 0;
     config.local.range = RING_SIZE;
@@ -1156,8 +1001,6 @@ fn rocket() -> _ {
         precessor: local_node.clone(),
         finger_table: vec![],
         storage: Storage::new(),
-        // network: None,
-        // connected: false,
         crashed: false,
     }));
 
@@ -1260,7 +1103,6 @@ fn rocket() -> _ {
             get_network_request_join,
             get_network_longest_range,
             post_network_longest_range,
-            // put_network_initialize,
             post_network_join,
             post_network_leave
         ],
