@@ -33,32 +33,3 @@ plt.grid(True)
 plt.legend()
 
 save_plot(plt, 'leave_and_join_without_fingertable.pdf')
-
-# # Data for 16 nodes with different finger table sizes
-# finger_results = [
-#     {'finger': 0, 'join_avg': 9.727128823598227, 'join_std': 0.24937378864760984, 'leave_avg': 8.968641916910807, 'leave_std': 0.038643329111794224},
-#     {'finger': 2, 'join_avg': 6.36955205599467, 'join_std': 0.06951057331176141, 'leave_avg': 5.978910128275554, 'leave_std': 0.10088526026373933},
-#     {'finger': 4, 'join_avg': 4.421700795491536, 'join_std': 0.047840331763432345, 'leave_avg': 4.0844349066416425, 'leave_std': 0.025710102112591657},
-#     {'finger': 6, 'join_avg': 4.369396527608235, 'join_std': 0.03211150621159705, 'leave_avg': 4.111806710561116, 'leave_std': 0.03154388183680087},
-#     {'finger': 8, 'join_avg': 4.009881019592285, 'join_std': 0.0331916351896988, 'leave_avg': 3.7238598664601645, 'leave_std': 0.04343130067673035}
-# ]
-
-# # Extract data for plotting for 16 nodes
-# finger_sizes = [entry['finger'] for entry in finger_results]
-# join_times_16 = [entry['join_avg'] for entry in finger_results]
-# join_stds_16 = [entry['join_std'] for entry in finger_results]
-# leave_times_16 = [entry['leave_avg'] for entry in finger_results]
-# leave_stds_16 = [entry['leave_std'] for entry in finger_results]
-
-# # Plot PUT and GET times for 16 nodes with different finger table sizes
-# plt.figure(figsize=(10, 6))
-# plt.errorbar(finger_sizes, join_times_16, yerr=join_stds_16, marker='o', color='orange', label='PUT', capsize=5)
-# plt.errorbar(finger_sizes, leave_times_16, yerr=leave_stds_16, marker='o', color='blue', label='GET', capsize=5)
-# plt.title('PUT and GET Operation Times for 16 Nodes with Different Finger-table Sizes')
-# plt.xlabel('Finger table size')
-# plt.ylabel('Time (seconds)')
-# plt.xticks(finger_sizes)
-# plt.grid(True)
-# plt.legend()
-
-# save_plot(plt, 'put_leave_times_vs_finger_table_size_16_nodes.pdf')
