@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import time
-import random
 import urllib.request
 import numpy as np
 
@@ -16,7 +15,6 @@ def dynamic_joining_test(nodes, num_runs=3):
         # Measure the time to join each node dynamically
         for node in other_nodes:
             join_start_time = time.time()
-            # Node joins through the first node in the network (single_node)
             join_url = f"http://{node}/join?nprime={single_node}"
             req = urllib.request.Request(url=join_url, method="POST")
             try:
@@ -48,7 +46,7 @@ def shutdown_nodes(nodes):
         print(f"Shutting down node: {node}")
         try:
             response = urllib.request.urlopen(f"http://{node}/shutdown")
-            response.read()  # Read response to complete the request
+            response.read()
         except urllib.error.URLError as e:
             print(f"Error shutting down node {node}: {e}")
 
@@ -64,18 +62,18 @@ if __name__ == "__main__":
         print("Invalid node count provided.")
         sys.exit(1)
 
-    # Start with the initial node
-    print("Starting initial node...")
-    run_script_output = os.popen(f"sh ../src/run-unjoined.sh 1 {8000}").read()
+    # Start nodes using run-unjoined.sh and capture the output
+    print(f"Starting {node_count} nodes...")
+    run_script_output = os.popen(f"sh ../src/run-unjoined.sh {node_count}").read()
 
-    # Generate node addresses for the test
-    nodes = [f"localhost:{8000 + i}" for i in range(1, node_count + 1)]
+    # Extract node addresses from the output
+    node_list_match = re.search(r'\[".*"\]', run_script_output)
+    if not node_list_match:
+        print("Failed to extract node list from run-unjoined.sh output.")
+        sys.exit(1)
 
-    # Deploy remaining nodes but keep them unjoined
-    print(f"Deploying {node_count - 1} additional nodes in unjoined state...")
-    for i in range(2, node_count + 1):
-        port = 8000 + i
-        os.popen(f"sh ../src/run-unjoined.sh {i} {port}")
+    node_list_json = node_list_match.group()
+    nodes = json.loads(node_list_json)
 
     print("Running dynamic joining test...")
     test_result = dynamic_joining_test(nodes)
