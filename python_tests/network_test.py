@@ -123,10 +123,15 @@ if __name__ == "__main__":
             print("Dynamic joining test encountered an issue for {node_count} nodes.")
         else:
             print("Dynamic joining test completed successfully for {node_count} nodes.")
+
+            # Calculate mean and standard deviation
+            join_avg = np.mean(test_result["join_avg"])
+            join_std = np.std(test_result["join_std"])
+
             result_entry = {
                 "nodes": node_count,
-                "join_avg": test_result["join_avg"],
-                "join_std": test_result["join_std"],
+                "join_avg": join_avg,
+                "join_std": join_std,
                 "total_time": test_result["total_time"],
                 "joins_count": test_result["joins_count"]
             }
