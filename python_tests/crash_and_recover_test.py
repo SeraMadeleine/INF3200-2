@@ -5,11 +5,9 @@ import time
 import urllib.error
 import urllib.request
 import random
-import uuid
 
-RESULTS_FILE = "res.txt"
-MAX_NODES = 2
-MAX_CRASHED_NODES = 1
+MAX_NODES = 4
+MAX_CRASHED_NODES = 4
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,7 +28,6 @@ def initialize_network(nodes):
     n_prime = nodes[0]
     for i in range(1, len(nodes)):
         try: 
-            # Join each node to n_prime (the first node in the list) to build the network 
             join_url = f"http://{nodes[i]}/join?nprime={n_prime}"
             req = urllib.request.Request(url=join_url, method="POST")
             urllib.request.urlopen(req)
@@ -57,24 +54,39 @@ def recover_node(node):
     except Exception as e:
         print(f"Error recovering node {node}: {e}")
 
-def check_node_status(node):
+def get_node_info(node):
+    """Get node information such as node_hash, successor, and others."""
     try:
         node_info_url = f"http://{node}/node-info"
         response = urllib.request.urlopen(node_info_url)
-        if response.status == 200:
-            print(f"Node {node} is operational.")
-            return True
+        data = json.loads(response.read().decode())
+        return data
     except urllib.error.HTTPError as e:
         if e.code == 503:
             print(f"Node {node} is currently crashed.")
-            return False
+            return None
         else:
-            print(f"Error checking status of node {node}: {e}")
+            print(f"Error getting node info for {node}: {e}")
     except Exception as e:
-        print(f"General error checking status of node {node}: {e}")
-    return False
+        print(f"General error getting node info for {node}: {e}")
+    return None
+
+def validate_network(nodes):
+    """Validate that the network is stable by checking successor/predecessor relationships."""
+    all_ok = True
+    for node in nodes:
+        info = get_node_info(node)
+        if not info:
+            continue
+        successor = info['successor']
+        others = info['others']
+        if not (successor and others):
+            print(f"Node {node} has inconsistent state: Successor: {successor}, Others: {others}")
+            all_ok = False
+    return all_ok
 
 def test_burst_crashes(nodes, max_crashes):
+    results = []
     for burst_size in range(1, max_crashes + 1):
         print(f"Testing burst of {burst_size} node(s) crash...")
         crashed_nodes = random.sample(nodes, burst_size)
@@ -82,30 +94,44 @@ def test_burst_crashes(nodes, max_crashes):
         # Simulate burst of crashes 
         for node in crashed_nodes:
             crash_node(node)
-
             time.sleep(1)
+            if get_node_info(node) is not None:
+                print(f"Node {node} is still operational after crash attempt.")
+                results.append("no")
+                break
+        else:
+            # Allow time for the network to stabilize after crashes
+            time.sleep(5)
 
-            if not check_node_status(node):
-                print(f"Node {node} has been confirmed as crashed.")
+            # Validate the network state after the crashes
+            if validate_network([node for node in nodes if node not in crashed_nodes]):
+                # Attempt to recover nodes
+                for node in crashed_nodes:
+                    recover_node(node)
+                    time.sleep(1)
+                    if get_node_info(node) is None:
+                        print(f"Node {node} did not recover correctly.")
+                        results.append("no")
+                        break
+                else:
+                    # Allow time for the network to stabilize after recovery
+                    time.sleep(5)
+
+                    # Validate the network state after recovery
+                    if validate_network(nodes):
+                        results.append("ok")
+                    else:
+                        results.append("no")
             else:
-                print(f"Node {node} is still operational after crash attempt. Check again.")
-        
-        # Allow time for the network to stabilize after crashes
-        time.sleep(5)
+                results.append("no")
 
-        # Recover the crashed nodes 
-        for node in crashed_nodes: 
-            recover_node(node)
+        # If the last test resulted in "no", stop further testing
+        if results[-1] == "no":
+            break
 
-            time.sleep(1)
-            # Check if the node has recovered
-            if check_node_status(node):
-                print(f"Node {node} has been confirmed as recovered.")
-            else:
-                print(f"Node {node} did not recover correctly. Check again.")
-
-        # Allow time for the network to stabilize after recovery
-        time.sleep(5)
+    # Print all results at the end
+    for i, result in enumerate(results, 1):
+        print(f"burst of node(s) {i}: {result}")
 
 def shutdown_nodes(nodes):
     for node in nodes:
@@ -125,4 +151,4 @@ if __name__ == "__main__":
         test_burst_crashes(nodes, MAX_CRASHED_NODES)
         shutdown_nodes(nodes)
     else: 
-        print("No nodes")
+        print(f'No nodes')
