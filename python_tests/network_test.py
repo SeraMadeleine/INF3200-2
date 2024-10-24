@@ -8,7 +8,7 @@ import urllib.request
 import numpy as np
 
 RESULTS_FILE = "res.txt"
-ITERATIONS = 3
+ITERATIONS = 1000
 NODE_COUNTS = [2, 4, 8, 16, 32]
 MAX_NODES = max(NODE_COUNTS)
 
