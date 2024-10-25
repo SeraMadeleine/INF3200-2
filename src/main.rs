@@ -159,6 +159,62 @@ fn post_sim_crash(node_config: &State<Arc<RwLock<NodeConfig>>>) -> Result<(), Cu
 fn post_sim_recover(node_config: &State<Arc<RwLock<NodeConfig>>>) -> () {
     let mut config = node_config.write().expect("RWLock is poisoned");
     config.recover();
+
+    let mut join_node: Option<Node> = None;
+    // // Check is precessor is online
+    let _ = match http_connect::get_from_node(
+        &config.precessor.hostname,
+        config.precessor.port,
+        "/helloworld",
+    ) {
+        Ok(response) => {
+            join_node = Some(config.precessor.clone());
+            Some(response)
+        }
+        Err(_err) => None,
+    };
+
+    if join_node.is_none() {
+        let _ = match http_connect::get_from_node(
+            &config.successor.hostname,
+            config.successor.port,
+            "/helloworld",
+        ) {
+            Ok(response) => {
+                join_node = Some(config.successor.clone());
+                Some(response)
+            }
+            Err(_err) => None,
+        };
+    }
+
+    // TODO: Check finger table
+    // else {
+    //     check finger table nodes
+    //         join_node = online node
+    // }
+    //
+    let local_hostname = config.local.hostname.clone();
+    let local_port = config.local.port;
+    drop(config);
+    if join_node.is_none() {
+        println!("Unable to join netwokr through previously known nodes.");
+    } else {
+        let join_path = format!(
+            "/join?nprime={}:{}",
+            join_node.as_ref().expect("").hostname.clone(),
+            join_node.as_ref().expect("").port.clone()
+        );
+        let _ = http_connect::write_body_to_node(
+            http_connect::WriteOperations::Post,
+            &local_hostname,
+            local_port,
+            &join_path,
+            "none",
+            "",
+        );
+    }
+    return ();
 }
 
 // endpoint to retrive a value for a given
@@ -469,7 +525,7 @@ fn calculate_finger_table(
 
     // Add local node to finger table, and all other nodes in the network
     let mut complete_node_list = vec![config.local.clone()];
-   
+
     let mut current_node = config.successor.clone();
 
     while current_node.hostname != config.local.hostname || current_node.port != config.local.port {
@@ -540,7 +596,6 @@ fn get_network(
 
     let mut known_nodes: Vec<String> = Vec::new();
 
-
     known_nodes.push(format!(
         "{}:{}",
         config.precessor.hostname, config.precessor.port
@@ -583,7 +638,6 @@ fn get_node_info(
         others: other_nodes,
     }));
 }
-
 
 #[get("/network/longest_range")]
 fn get_network_longest_range(
@@ -827,7 +881,6 @@ fn post_network_join(
         Ok(parsed) => parsed,
     };
 
-
     config.local.position = received_network_information.longest_range.holder.position
         + received_network_information.longest_range.holder.range / 2;
 
@@ -878,9 +931,7 @@ fn post_network_join(
         }
     };
 
-    return Ok(format!(
-        "Joined network!",
-    ));
+    return Ok(format!("Joined network!",));
 }
 
 #[post("/leave")]
