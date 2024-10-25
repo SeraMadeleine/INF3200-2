@@ -17,6 +17,9 @@ if ! [[ "$1" =~ $regex_positive_integer ]]; then
 fi
 
 
+rm $BINARY_FILE
+rm "run-node.sh"
+
 
 finger_table_size=0
 # See if the argument is an integer
